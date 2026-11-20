@@ -1,0 +1,51 @@
+name: Build Unsigned IPA (v1.2.3)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - name: Checkout v1.2.3
+        uses: actions/checkout@v4
+        with:
+          ref: v1.2.3
+
+      - name: Strip paid-only entitlements for free sideloading
+        run: |
+          find . -name "*.entitlements" -exec sh -c '
+            cat <<EOF > "$1"
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict/>
+          </plist>
+          EOF
+          ' _ {} \;
+
+      - name: Build unsigned .app
+        run: |
+          xcodebuild \
+            -project Amperfy.xcodeproj \
+            -scheme Amperfy \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination "generic/platform=iOS" \
+            -derivedDataPath build \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
+      - name: Package Payload into IPA
+        run: |
+          mkdir -p Payload
+          cp -r build/Build/Products/Release-iphoneos/Amperfy.app Payload/
+          zip -qry Amperfy-1.2.3-unsigned.ipa Payload
+
+      - name: Upload IPA Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Amperfy-1.2.3-unsigned
+          path: Amperfy-1.2.3-unsigned.ipa
